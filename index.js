@@ -1,8 +1,8 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import mqtt from 'mqtt'
 import sqlite3 from 'sqlite3'
-
+import Database from 'better-sqlite3';
+// sqlite3.verbose()
 
 // Initialize SQLite database
 const dbPromise = new Promise((resolve, reject) => {
@@ -14,17 +14,16 @@ const dbPromise = new Promise((resolve, reject) => {
     })
 })
 
-// Create a sample table if it doesn't exist
+
 dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS iaq_sensor_data (
+    await db.exec(`CREATE TABLE IF NOT EXISTS hlr_sensor_data(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        "device_id" TEXT,
-        "temp" REAL,
-        "humidity" REAL,
-        "Co2" REAL,
-        "type_label" TEXT,
-        "mode" TEXT
+        datetime INTEGER,
+        sensor_id TEXT,
+        co2 REAL,
+        temperature REAL,
+        humidity REAL,
+        mode TEXT
     )`)
 }).catch(err => {
     console.error('Failed to initialize database:', err)
@@ -46,39 +45,6 @@ dbPromise.then(async (db) => {
     console.error('Failed to initialize database:', err)
 })
 
-// Connect to MQTT broker
-
-const mqttClient = mqtt.connect('mqtt://broker.hivemq.com');
-
-// MQTT event handlers
-mqttClient.on('connect', () => {
-    console.log('Connected to MQTT broker')
-    mqttClient.subscribe('hlr-topic-test-demo', (err) => {
-        if (!err) console.log('Subscribed to topic: mytopic')
-    })
-})
-
-// Handle incoming messages
-mqttClient.on('message', (topic, message) => {
-    const jsonString = message.toString();
-    try {
-        const data = JSON.parse(jsonString);
-        // Assuming the message contains device_id, temp, humidity, Co2, and type
-        const { device_id, temp, humidity, Co2, type, mode } = data;
-
-        // Insert the received data into the database
-        dbPromise.then(async (db) => {
-            const stmt = await db.prepare(`INSERT INTO iaq_sensor_data (device_id, temp, humidity, Co2, type_label, mode) VALUES (?, ?, ?, ?, ?, ?)`);
-            await stmt.run(device_id, temp, humidity, Co2, type, mode);
-            await stmt.finalize();
-            // console.log('Data inserted into database:', data);
-        }).catch(err => {
-            console.error('Failed to insert data into database:', err);
-        });
-    } catch (e) {
-        console.error('Failed to parse MQTT message as JSON:', e);
-    }
-})
 
 const app = Fastify({
     logger: true
@@ -90,46 +56,35 @@ app.register(cors, {
 
 app.get('/health', async (request, reply) => {
     return { status: 'ok' }
-})
+});
 
-app.post('/data/iaq/', async (request, reply) => {
-    const { start, end } = request.body;
-    const db = await dbPromise
-    const rows = await db.all('SELECT * FROM messages WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp DESC', [start, end])
-    return rows
-})
 
-// Endpoint to publish a message to a topic
-app.post('/publish', async (request, reply) => {
-    const {
-        topic,
-        title,
-        regen_fan_volt,
-        regen_heater_temp,
-        regen_duration,
-        scab_fan_volt,
-        scab_duration
-    } = request.body
-    const message = JSON.stringify({
-        title,
-        regen_fan_volt,
-        regen_heater_temp,
-        regen_duration,
-        scab_fan_volt,
-        scab_duration
-    })
+app.post('/loop/data/iaq', async (request, reply) => {
+    const { start, lastTimestamp, firstTime } = request.body;
+    console.log(start, lastTimestamp, firstTime)
+    const db = new Database('./hlr_db.db')
+    // swr 
+    // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
+    if (!firstTime) {
+        // console.log("In f")
+        const query = `
+            SELECT id, datetime, sensor_id, co2, temperature, humidity, mode
+            FROM hlr_sensor_data
+            WHERE datetime > ?
+            ORDER BY datetime ASC
+            LIMIT 100
+        `;
+        const rows = db.prepare(query).all(lastTimestamp)
+        return rows;
+    } else {
+        const query = `SELECT * FROM hlr_sensor_data
+        WHERE datetime >= ? ORDER BY datetime ASC
+        `;
+        const rows = db.prepare(query).all(start)
+        return rows;
+    }
+});
 
-    // Save the command to the database
-    const db = await dbPromise
-    const stmt = await db.prepare(`INSERT INTO order_device_history (title, regen_fan_volt, regen_heater_temp, regen_duration, scab_fan_volt, scab_duration) VALUES (?, ?, ?, ?, ?, ?)`);
-    await stmt.run(title, regen_fan_volt, regen_heater_temp, regen_duration, scab_fan_volt, scab_duration);
-    await stmt.finalize();
-
-    // Publish the message to the specified topic
-    mqttClient.publish(topic, message)
-    return { status: 'message published' }
-
-})
 
 app.listen({ port: 3011 }, (err, address) => {
     if (err) {
