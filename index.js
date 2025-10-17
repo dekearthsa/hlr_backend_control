@@ -29,17 +29,18 @@ dbPromise.then(async (db) => {
     console.error('Failed to initialize database:', err)
 })
 
-
 dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS order_device_history (
+    await db.exec(`CREATE TABLE IF NOT EXISTS setting_control (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        "title" TEXT,
+        "cyclic_name" TEXT,
         "regen_fan_volt" REAL,
         "regen_heater_temp" REAL,
-        "regen_duration" REAL,
+        "regen_duration" INTEGER,
         "scab_fan_volt" REAL,
-        "scab_duration" REAL  
+        "scab_duration" INTEGER,
+        "idle_duration" INTEGER,
+        "cyclic_loop" INTEGER
     )`)
 }).catch(err => {
     console.error('Failed to initialize database:', err)
@@ -60,12 +61,13 @@ app.get('/health', async (request, reply) => {
 
 
 app.post('/loop/data/iaq', async (request, reply) => {
-    const { start, lastTimestamp, firstTime } = request.body;
-    console.log(start, lastTimestamp, firstTime)
+    const { start, latesttime } = request.body;
+    console.log(start, latesttime)
     const db = new Database('./hlr_db.db')
     // swr 
     // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
-    if (!firstTime) {
+    if (latesttime > 0) {
+        // console.log("Aaaaa")
         // console.log("In f")
         const query = `
             SELECT id, datetime, sensor_id, co2, temperature, humidity, mode
@@ -74,13 +76,15 @@ app.post('/loop/data/iaq', async (request, reply) => {
             ORDER BY datetime ASC
             LIMIT 100
         `;
-        const rows = db.prepare(query).all(lastTimestamp)
+        const rows = db.prepare(query).all(latesttime)
         return rows;
     } else {
+        // console.log("eee")
         const query = `SELECT * FROM hlr_sensor_data
         WHERE datetime >= ? ORDER BY datetime ASC
         `;
         const rows = db.prepare(query).all(start)
+        console.log(rows)
         return rows;
     }
 });
