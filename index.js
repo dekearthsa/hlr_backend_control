@@ -75,6 +75,13 @@ app.get('/health', async (request, reply) => {
     return { status: 'ok' }
 });
 
+app.post('/get/status', async (request, reply) => {
+    const { cyclicName } = request.body;
+    const db = new Database('./hlr_db.db');
+    const sql = `SELECT * FROM state_hlr WHERE cyclicName = ?`
+
+})
+
 app.post('/remove/format', async (request, reply) => {
     const { cyclicName } = request.body;
     console.log(cyclicName)
@@ -210,9 +217,11 @@ app.post('/start', async (request, reply) => {
         const queryFindStateHlr = `SELECT * FROM state_hlr`;
         const rows = db.prepare(queryFind).all(cyclicName);
         const rowsStateHlr = db.prepare(queryFindStateHlr).all();
-
+        // console.log("rows => ", rows)
+        // console.log("rowsStateHlr =s> ", rowsStateHlr)
         if (rows.length > 0) {
             // Update ถ้ามีข้อมูลอยู่แล้ว
+            // console.log("(rows.length > 0) {")
             const queryUpdate = `
                 UPDATE setting_control
                 SET 
@@ -252,20 +261,18 @@ app.post('/start', async (request, reply) => {
                     cyclic_loop_dur = ?,
                     starttime = ?,
                     endtime = ?
-                    WHERE cyclicName = ?
                 `;
 
-                const status = await db.prepare(queryStateHlr).run(
+                await db.prepare(queryStateHlr).run(
                     cyclicName,
                     "regen_firsttime",
                     1,
                     cyclicLoop,
                     ms,
-                    ms + (Number(regenDur) * 60 * 1000),
-                    cyclicName
+                    ms + (Number(regenDur) * 60 * 1000)
                 )
 
-                // console.log(status)
+                // console.log("update...")
                 reply.send({ status: 'updated', cyclicName });
             } else {
                 // console.log(ms)
@@ -309,9 +316,8 @@ app.post('/start', async (request, reply) => {
                     cyclic_loop_dur = ?,
                     starttime = ?,
                     endtime = ?
-                    WHERE cyclicName = ?
                 `;
-                db.prepare(queryStateHlr).run(cyclicName, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000), cyclicName)
+                db.prepare(queryStateHlr).run(cyclicName, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
                 reply.send({ status: 'inserted', cyclicName });
             } else {
                 const queryStateHlr = ` INSERT INTO state_hlr
