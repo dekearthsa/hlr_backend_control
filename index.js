@@ -2,7 +2,10 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import sqlite3 from 'sqlite3'
 import Database from 'better-sqlite3';
+import axios from 'axios';
 // sqlite3.verbose()
+
+const HTTP_API = 'http://172.29.247.180'
 
 // Initialize SQLite database
 const dbPromise = new Promise((resolve, reject) => {
@@ -34,6 +37,7 @@ dbPromise.then(async (db) => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "cyclicName" TEXT,
         "systemState" TEXT,
+        "systemType" TEXT,
         "is_start" INTEGER,
         "cyclic_loop_dur" INTEGER,
         "starttime" INTEGER,
@@ -71,14 +75,45 @@ app.register(cors, {
     origin: '*'
 })
 
+
+
 app.get('/health', async (request, reply) => {
     return { status: 'ok' }
 });
 
-app.post('/get/status', async (request, reply) => {
-    const { cyclicName } = request.body;
+app.post('/manual', async (request, reply) => {
+    const { fanVolt, fanOn, heaterOn } = request.body;
+    try {
+        const payload = {
+            fan_volt: fanOn ? fanVolt : 0,
+            heater: heaterOn,
+        }
+        console.log("manual = >", payload)
+        const reusltOut = await axios.post(`${HTTP_API}/manual`, payload);
+        if (reusltOut.status !== 200) {
+            const db = new Database('./hlr_db.db');
+            sql = "UPDATE state_hlr SET systemType = ?"
+            await db.prepare(queryStateHlr).run("manual")
+            reply.send({ status: reusltOut.status })
+        } else {
+            reply.send({ status: 200 })
+        }
+    } catch (err) {
+        console.log(`error in app.post('/manual' ${err}`)
+        reply.send(err)
+    }
+});
+
+// app.get("/stop")
+
+app.get('/get/status', async (request, reply) => {
+    // const { cyclicName } = request.body;
+    // console.log("calling...")
     const db = new Database('./hlr_db.db');
-    const sql = `SELECT * FROM state_hlr WHERE cyclicName = ?`
+    const sql = `SELECT * FROM state_hlr`;
+    const row = db.prepare(sql).all();
+    // console.log("row => ", row)
+    reply.send(row)
 
 })
 
@@ -167,37 +202,49 @@ app.post("/save/format", async (request, reply) => {
     reply.send({ status: 'inserted', cyclicName });
 })
 
-app.post('/stop', async (request, reply) => {
-    const { cyclicName } = request.body;
+app.get('/manual/stop', async (request, reply) => {
+    const result = await axios.get(`${HTTP_API}/stop`);
+    console.log("/manual/stop => ", result)
+    if (result.status === 200) {
+        reply.send("ok");
+    } else {
+        console.log(result.status)
+    }
+
+})
+
+app.get('/stop', async (request, reply) => {
+    // const { cyclicName } = request.body;
     const db = new Database('./hlr_db.db');
-    // const queryFindStateHlr = `SELECT * FROM state_hlr`;
-    const queryStateHlr = ` UPDATE state_hlr
-                    SET
+
+    // // production on this 
+    // await axios.get(`http://localhost:3331/emergency_shutdown`)
+    const queryStateHlr = ` UPDATE state_hlr SET
                     systemState = ?,
+                    systemType = ?,
                     is_start = ?,
                     cyclic_loop_dur = ?,
                     starttime = ?,
-                    endtime = ?
-                    WHERE cyclicName = ?
-                `;
+                    endtime = ?`;
 
     await db.prepare(queryStateHlr).run(
         "end",
+        "",
         0,
         0,
         0,
         0,
-        cyclicName
     )
 
     // console.log(status)
-    reply.send({ status: 'stopped', cyclicName });
+    reply.send({ status: 'stopped' });
 })
 
 
 app.post('/start', async (request, reply) => {
     const {
         cyclicName,
+        systemType,
         regenFan,
         regenHeater,
         regenDur, // int min
@@ -256,6 +303,7 @@ app.post('/start', async (request, reply) => {
                 const queryStateHlr = ` UPDATE state_hlr
                     SET
                     cyclicName = ?,
+                    systemType = ?,
                     systemState = ?,
                     is_start = ?,
                     cyclic_loop_dur = ?,
@@ -265,6 +313,7 @@ app.post('/start', async (request, reply) => {
 
                 await db.prepare(queryStateHlr).run(
                     cyclicName,
+                    systemType,
                     "regen_firsttime",
                     1,
                     cyclicLoop,
@@ -278,10 +327,10 @@ app.post('/start', async (request, reply) => {
                 // console.log(ms)
                 // console.log(ms + (regenDur * 60 * 1000))
                 const queryStateHlr = ` INSERT INTO state_hlr
-                    (cyclicName, systemState, is_start, cyclic_loop_dur, starttime, endtime)
-                    VALUES (?,?,?,?,?,?)
+                    (cyclicName, systemType,systemState, is_start, cyclic_loop_dur, starttime, endtime)
+                    VALUES (?,?,?,?,?,?,?)
                 `;
-                db.prepare(queryStateHlr).run(cyclicName, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
+                db.prepare(queryStateHlr).run(cyclicName, systemType, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
                 reply.send({ status: 'updated', cyclicName });
             }
 
@@ -311,20 +360,21 @@ app.post('/start', async (request, reply) => {
                 const queryStateHlr = ` UPDATE state_hlr
                     SET
                     cyclicName = ?,
+                    systemType = ?,
                     systemState = ?,
                     is_start = ?,
                     cyclic_loop_dur = ?,
                     starttime = ?,
                     endtime = ?
                 `;
-                db.prepare(queryStateHlr).run(cyclicName, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
+                db.prepare(queryStateHlr).run(cyclicName, systemType, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
                 reply.send({ status: 'inserted', cyclicName });
             } else {
                 const queryStateHlr = ` INSERT INTO state_hlr
-                    (cyclicName,cyclicName, systemState, is_start, cyclic_loop_dur, starttime, endtime)
-                    VALUES (?,?, ?,?,?)
+                    (cyclicName, systemType,cyclicName, systemState, is_start, cyclic_loop_dur, starttime, endtime)
+                    VALUES (?,?,?, ?,?,?)
                 `;
-                db.prepare(queryStateHlr).run(cyclicName, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
+                db.prepare(queryStateHlr).run(cyclicName, systemType, "regen_firsttime", 1, cyclicLoop, ms, ms + (Number(regenDur) * 60 * 1000))
                 reply.send({ status: 'inserted', cyclicName });
             }
 
