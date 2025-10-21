@@ -26,7 +26,8 @@ dbPromise.then(async (db) => {
         co2 REAL,
         temperature REAL,
         humidity REAL,
-        mode TEXT
+        mode TEXT,
+        sensor_type TEXT
     )`)
 }).catch(err => {
     console.error('Failed to initialize database:', err)
@@ -400,18 +401,18 @@ app.post('/loop/data/iaq', async (request, reply) => {
         const query = `
             SELECT id, datetime, sensor_id, co2, temperature, humidity, mode
             FROM hlr_sensor_data
-            WHERE datetime > ?
+            WHERE datetime > ? AND sensor_type = ?
             ORDER BY datetime ASC
             LIMIT 100
         `;
-        const rows = db.prepare(query).all(latesttime)
+        const rows = db.prepare(query).all(latesttime, 'tongdy')
         return rows;
     } else {
         // console.log("eee")
         const query = `SELECT * FROM hlr_sensor_data
-        WHERE datetime >= ? ORDER BY datetime ASC
+        WHERE datetime >= ? AND sensor_type = ? ORDER BY datetime ASC
         `;
-        const rows = db.prepare(query).all(start)
+        const rows = db.prepare(query).all(start, 'tongdy')
         console.log(rows)
         return rows;
     }
