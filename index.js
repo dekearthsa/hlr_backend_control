@@ -142,20 +142,20 @@ app.get('/push/format', async (request, reply) => {
             id: el.id,
             title: el.cyclic_name,
             regen: {
-                fanVolt: 0,
-                heaterTemp: 0,
-                durationMin: 0,
+                fanVolt: el.regen_fan_volt,
+                heaterTemp: el.regen_heater_temp,
+                durationMin: el.regen_duration,
             },
             scab: {
-                fanVolt: 0,
-                durationMin: 0,
+                fanVolt: el.scab_fan_volt,
+                durationMin: el.scab_duration,
             },
             cool: {
-                fanVolt: 0,
-                durationMin: 0,
+                fanVolt: el.cool_fan,
+                durationMin: el.cool_duration,
             },
             idle: {
-                durationMin: 0
+                durationMin: el.idle_duration
             },
             savedAt: el.timestamp,
             cyclic_loop: el.cyclic_loop
