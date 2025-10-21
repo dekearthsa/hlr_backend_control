@@ -69,9 +69,10 @@ dbPromise.then(async (db) => {
 
 
 const app = Fastify({
-    logger: true
-})
-
+    logger: {
+        level: "error"
+    }
+});
 app.register(cors, {
     origin: '*'
 })
@@ -89,7 +90,7 @@ app.post('/manual', async (request, reply) => {
             fan_volt: fanOn ? fanVolt : 0,
             heater: heaterOn,
         }
-        console.log("manual = >", payload)
+        // console.log("manual = >", payload)
         const reusltOut = await axios.post(`${HTTP_API}/manual`, payload);
         if (reusltOut.status !== 200) {
             const db = new Database('./hlr_db.db');
@@ -120,7 +121,7 @@ app.get('/get/status', async (request, reply) => {
 
 app.post('/remove/format', async (request, reply) => {
     const { cyclicName } = request.body;
-    console.log(cyclicName)
+    // console.log(cyclicName)
     const db = new Database('./hlr_db.db');
     const sqlRmove = `DELETE FROM setting_control WHERE cyclic_name = ?`
     const sqlStateRemove = `DELETE FROM state_hlr WHERE cyclicName = ?`
@@ -205,7 +206,7 @@ app.post("/save/format", async (request, reply) => {
 
 app.get('/manual/stop', async (request, reply) => {
     const result = await axios.get(`${HTTP_API}/stop`);
-    console.log("/manual/stop => ", result)
+    // console.log("/manual/stop => ", result)
     if (result.status === 200) {
         reply.send("ok");
     } else {
@@ -391,7 +392,7 @@ app.post('/start', async (request, reply) => {
 
 app.post('/loop/data/iaq', async (request, reply) => {
     const { start, latesttime } = request.body;
-    console.log(start, latesttime)
+    // console.log(start, latesttime)
     const db = new Database('./hlr_db.db')
     // swr 
     // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
@@ -413,7 +414,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
         WHERE datetime >= ? AND sensor_type = ? ORDER BY datetime ASC
         `;
         const rows = db.prepare(query).all(start, 'tongdy')
-        console.log(rows)
+        // console.log(rows)
         return rows;
     }
 });
