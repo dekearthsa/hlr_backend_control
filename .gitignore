@@ -1,9 +1,2 @@
-hlr_db.db
 node_modules
-.DS_Store
-.env
-npm-debug.log
-yarn-error.log
-.vscode
-.idea
-dist        
+ 
