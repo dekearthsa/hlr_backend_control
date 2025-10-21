@@ -1,0 +1,40 @@
+[Unit]
+Description=HLR Backend
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/hlr_backend_control
+
+# ตั้งค่าที่พบบ่อย
+Environment="NODE_ENV=production"
+# ถ้าแอปฟังทุกเครือข่าย/พอร์ตเฉพาะ ใส่ได้ เช่น:
+# Environment="HOST=0.0.0.0"
+# Environment="PORT=3000"
+
+# ถ้าใช้ .env ให้ systemd โหลด (ตัวเลือก)
+# EnvironmentFile=/home/pi/hlr_backend_control/.env
+# หรือย้ายไป /etc/hlr_backend.env แล้วใช้:
+# EnvironmentFile=/etc/hlr_backend.env
+
+# คำสั่งรัน
+ExecStart=/usr/bin/node /home/pi/hlr_backend_control/index.js
+
+# ปรับพฤติกรรมหยุด/รีสตาร์ท (ทนทาน)
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+# logging ไป journalctl
+StandardOutput=journal
+StandardError=journal
+
+# เพิ่มเพดานไฟล์ถ้าจำเป็น (web sockets/โหลดเยอะ)
+# LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
