@@ -207,6 +207,23 @@ app.post("/save/format", async (request, reply) => {
 app.get('/manual/stop', async (request, reply) => {
     const result = await axios.get(`${HTTP_API}/stop`);
     // console.log("/manual/stop => ", result)
+    const db = new Database('./hlr_db.db');
+    const queryStateHlr = ` UPDATE state_hlr SET
+                    systemState = ?,
+                    systemType = ?,
+                    is_start = ?,
+                    cyclic_loop_dur = ?,
+                    starttime = ?,
+                    endtime = ?`;
+
+    await db.prepare(queryStateHlr).run(
+        "end",
+        "",
+        0,
+        0,
+        0,
+        0,
+    )
     if (result.status === 200) {
         reply.send("ok");
     } else {
