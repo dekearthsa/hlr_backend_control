@@ -36,6 +36,24 @@ dbPromise.then(async (db) => {
 })
 
 dbPromise.then(async (db) => {
+    await db.exec(`CREATE TABLE IF NOT EXISTS hlr_iaq_sensor_data(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER,
+        VOC REAL,
+        CO2 REAL,
+        CH2O REAL,
+        eVOC REAL,
+        Humid REAL,
+        Temp REAL,
+        PM25 REAL,
+        PM10 REAL,
+        CO REAL
+    )`)
+}).catch(err => {
+    console.error('Failed to initialize database:', err)
+})
+
+dbPromise.then(async (db) => {
     await db.exec(`CREATE TABLE IF NOT EXISTS state_hlr (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "cyclicName" TEXT,
@@ -406,6 +424,41 @@ app.post('/start', async (request, reply) => {
         reply.status(500).send({ error: 'Database operation failed', detail: err.message });
     }
 });
+
+app.post("/receive/iaq", async (request, reply) => {
+    const {
+        VOC,
+        CO2,
+        CH2O,
+        eVOC,
+        Humid,
+        Temp,
+        PM25,
+        PM10,
+        CO
+    } = request.body;
+    const ms = Date.now();
+    query = `
+        INSERT INTO hlr_iaq_sensor_data
+            (timestamp,VOC,CO2,CH2O,eVOC,Humid, Temp, PM25, PM10, CO)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+    db.prepare(queryInsert).run(
+        ms,
+        VOC,
+        CO2,
+        CH2O,
+        CH2O,
+        eVOC,
+        Humid,
+        Temp,
+        PM25,
+        PM10,
+        CO
+    );
+
+    reply.send("ok")
+})
 
 app.post("/download/csv", async (request, reply) => {
     const { startMs, endMs } = request.body;
