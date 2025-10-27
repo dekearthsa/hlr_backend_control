@@ -470,6 +470,7 @@ app.post("/download/csv", async (request, reply) => {
         SELECT
             sensor_type,
             sensor_id,
+            cyclicName,
             strftime('%Y-%m-%d %H:%M:00', datetime/1000, 'unixepoch', '+7 hours') AS minute_th,
             1000 * (
                 (CAST(strftime('%s', datetime/1000, 'unixepoch', '+7 hours') AS INTEGER) / 60) * 60
@@ -498,7 +499,7 @@ app.post("/download/csv", async (request, reply) => {
             COUNT(*) AS samples
             FROM hlr_sensor_data
             WHERE datetime BETWEEN ? AND ?
-            GROUP BY sensor_type, sensor_id, minute_th
+            GROUP BY sensor_type, sensor_id, minute_th, cyclicName
             ORDER BY minute_th, sensor_type, sensor_id;`
     const rows = db.prepare(query).all(startMs, endMs);
     // --- ใช้ json2csv แปลงเป็นไฟล์ CSV ---
@@ -507,6 +508,7 @@ app.post("/download/csv", async (request, reply) => {
             'minute_th',
             'sensor_type',
             'sensor_id',
+            'cyclicName',
             'sensor_name',
             'avg_co2',
             'avg_temperature',
