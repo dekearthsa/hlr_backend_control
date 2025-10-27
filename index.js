@@ -36,7 +36,7 @@ dbPromise.then(async (db) => {
 })
 
 dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS hlr_iaq_sensor_data(
+    await db.exec(`CREATE TABLE IF NOT EXISTS ter(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp INTEGER,
         VOC REAL,
@@ -439,7 +439,7 @@ app.post("/receive/iaq", async (request, reply) => {
     } = request.body;
     const ms = Date.now();
     query = `
-        INSERT INTO hlr_iaq_sensor_data
+        INSERT INTO ter
             (timestamp,VOC,CO2,CH2O,eVOC,Humid, Temp, PM25, PM10, CO)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
@@ -542,6 +542,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             CASE
                 WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
                 WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
+                WHEN sensor_id = 51 THEN 0
             END co2_adjust
             FROM hlr_sensor_data
             WHERE datetime > ?
@@ -552,11 +553,12 @@ app.post('/loop/data/iaq', async (request, reply) => {
         return rows;
     } else {
         // console.log("eee")
-        const query = `SELECT *, 
+        const query = `SELECT datetime,sensor_id, 
             CASE
                 WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
                 WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
-            END co2_adjust
+                WHEN sensor_id = 51 THEN 0
+            END co2, temperature, humidity, mode
             FROM hlr_sensor_data
         WHERE datetime >= ?  ORDER BY datetime ASC
         `;
