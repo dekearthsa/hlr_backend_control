@@ -3,8 +3,10 @@ import cors from '@fastify/cors'
 import sqlite3 from 'sqlite3'
 import Database from 'better-sqlite3';
 import axios from 'axios';
+import { Parser } from 'json2csv'
+import fs from 'fs'
+import path from 'path'
 // sqlite3.verbose()
-
 const HTTP_API = 'http://172.29.247.180'
 
 // Initialize SQLite database
@@ -405,32 +407,107 @@ app.post('/start', async (request, reply) => {
     }
 });
 
+app.post("/download/csv", async (request, reply) => {
+    const { startMs, endMs } = request.body;
+    if (!startMs) return reply.status(400).send("Invalid payload");
+    if (!endMs) return reply.status(400).send("Invalid payload");
+    const db = new Database('./hlr_db.db')
+    const query = `
+        SELECT
+            sensor_type,
+            sensor_id,
+            strftime('%Y-%m-%d %H:%M:00', datetime/1000, 'unixepoch', '+7 hours') AS minute_th,
+            1000 * (
+                (CAST(strftime('%s', datetime/1000, 'unixepoch', '+7 hours') AS INTEGER) / 60) * 60
+            ) AS minute_th_ms,
 
+            AVG(co2)         AS avg_co2,
+            AVG(temperature) AS avg_temperature,
+            AVG(humidity)    AS avg_humidity,
+
+            AVG(
+                CASE
+                WHEN sensor_id = 2  THEN (1.023672650 * co2) - 19.479471
+                WHEN sensor_id = 3  THEN (0.970384222 * co2) - 99.184335
+                WHEN sensor_id = 51 THEN 0
+                END
+            ) AS avg_co2_adjust,
+
+            MIN(
+                CASE
+                WHEN sensor_id = 2  THEN 'Co2_Outlet'
+                WHEN sensor_id = 3  THEN 'Co2_Inlet'
+                WHEN sensor_id = 51 THEN 'TK'
+                END
+            ) AS sensor_name,
+
+            COUNT(*) AS samples
+            FROM hlr_sensor_data
+            WHERE datetime BETWEEN ? AND ?
+            GROUP BY sensor_type, sensor_id, minute_th
+            ORDER BY minute_th, sensor_type, sensor_id;`
+    const rows = db.prepare(query).all(startMs, endMs);
+    // --- ใช้ json2csv แปลงเป็นไฟล์ CSV ---
+    const parser = new Parser({
+        fields: [
+            'minute_th',
+            'sensor_type',
+            'sensor_id',
+            'sensor_name',
+            'avg_co2',
+            'avg_temperature',
+            'avg_humidity',
+            'avg_co2_adjust',
+            'samples'
+        ]
+    });
+    const csv = parser.parse(rows);
+
+    // --- ตั้งชื่อไฟล์และเขียนชั่วคราว ---
+    const filename = `sensor_avg_1min_${Date.now()}.csv`;
+    const filepath = path.join('./', filename);
+    fs.writeFileSync(filepath, csv);
+
+    // --- ส่งออกเป็นไฟล์ให้โหลด ---
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    return reply.send(fs.createReadStream(filepath));
+    // return reply.status(200).send(rows)
+})
+
+// app.post("/get")
 
 app.post('/loop/data/iaq', async (request, reply) => {
     const { start, latesttime } = request.body;
     // console.log(start, latesttime)
-    const db = new Database('./hlr_db.db')
+    const db = new Database('./hlr_db.db');
     // swr 
     // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
     if (latesttime > 0) {
-        // console.log("Aaaaa")
-        // console.log("In f")
         const query = `
-            SELECT id, datetime, sensor_id, co2, temperature, humidity, mode
+            SELECT datetime, sensor_id, co2, temperature, humidity, mode,
+            CASE
+                WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
+                WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
+            END co2_adjust
             FROM hlr_sensor_data
-            WHERE datetime > ? AND sensor_type = ?
+            WHERE datetime > ?
             ORDER BY datetime ASC
             LIMIT 100
         `;
-        const rows = db.prepare(query).all(latesttime, 'tongdy')
+        const rows = db.prepare(query).all(latesttime)
         return rows;
     } else {
         // console.log("eee")
-        const query = `SELECT * FROM hlr_sensor_data
-        WHERE datetime >= ? AND sensor_type = ? ORDER BY datetime ASC
+        const query = `SELECT *, 
+            CASE
+                WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
+                WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
+            END co2_adjust
+            FROM hlr_sensor_data
+        WHERE datetime >= ?  ORDER BY datetime ASC
         `;
-        const rows = db.prepare(query).all(start, 'tongdy')
+        const rows = db.prepare(query).all(start)
         // console.log(rows)
         return rows;
     }
@@ -442,5 +519,6 @@ app.listen({ port: 3011, host: '0.0.0.0' }, (err, address) => {
         app.log.error(err)
         process.exit(1)
     }
-    app.log.info(`Server listening at ${address}`)
+    console.log(`Service hlr-backend run at 3011`)
+    // app.log.info(`Server listening at ${address}`)
 });
