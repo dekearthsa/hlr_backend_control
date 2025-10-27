@@ -29,7 +29,8 @@ dbPromise.then(async (db) => {
         temperature REAL,
         humidity REAL,
         mode TEXT,
-        sensor_type TEXT
+        sensor_type TEXT,
+        cyclicName TEXT
     )`)
 }).catch(err => {
     console.error('Failed to initialize database:', err)
@@ -474,9 +475,9 @@ app.post("/download/csv", async (request, reply) => {
                 (CAST(strftime('%s', datetime/1000, 'unixepoch', '+7 hours') AS INTEGER) / 60) * 60
             ) AS minute_th_ms,
 
-            AVG(co2)         AS avg_co2,
+            AVG(co2) AS avg_co2,
             AVG(temperature) AS avg_temperature,
-            AVG(humidity)    AS avg_humidity,
+            AVG(humidity) AS avg_humidity,
 
             AVG(
                 CASE
