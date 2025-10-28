@@ -37,7 +37,7 @@ dbPromise.then(async (db) => {
 })
 
 dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS ter(
+    await db.exec(`CREATE TABLE IF NOT EXISTS hlr_iaq_sensor_data(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp INTEGER,
         VOC REAL,
@@ -427,38 +427,30 @@ app.post('/start', async (request, reply) => {
 });
 
 app.post("/receive/iaq", async (request, reply) => {
-    const {
-        VOC,
-        CO2,
-        CH2O,
-        eVOC,
-        Humid,
-        Temp,
-        PM25,
-        PM10,
-        CO
-    } = request.body;
+    const payloadIN = request.body;
+
+    if (!payloadIN.data.is_updated) return reply.status(200).send("is_updated: false");
+
     const ms = Date.now();
     query = `
-        INSERT INTO ter
+        INSERT INTO hlr_iaq_sensor_data
             (timestamp,VOC,CO2,CH2O,eVOC,Humid, Temp, PM25, PM10, CO)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
     db.prepare(queryInsert).run(
-        ms,
-        VOC,
-        CO2,
-        CH2O,
-        CH2O,
-        eVOC,
-        Humid,
-        Temp,
-        PM25,
-        PM10,
-        CO
+        ms, //1 
+        payloadIN.data.VOC_ppb, // voc 2
+        payloadIN.data.CO2_ppm, // co2 3
+        payloadIN.data.CH2O_ppm, // ch20 4
+        payloadIN.data.eVOC_ppb, // eboc 5
+        0, // 6
+        0, // 7
+        0, // 8
+        0, // 9
+        0 // 10
     );
 
-    reply.send("ok")
+    reply.status(200).send("ok")
 })
 
 app.post("/download/csv", async (request, reply) => {
