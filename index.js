@@ -523,15 +523,14 @@ app.post("/download/csv", async (request, reply) => {
     const parser = new Parser({
         fields: [
             'minute_th',
-            'sensor_type',
-            'sensor_id',
             'cyclicName',
-            'sensor_name',
-            'avg_co2',
-            'avg_temperature',
-            'avg_humidity',
-            'avg_co2_adjust',
-            'samples'
+            'co2_outlet',
+            'co2_inlet',
+            'temp_outlet',
+            'temp_inlet',
+            'temp_tk',
+            'humid_outlet',
+            'hunmid_inlet'
         ]
     });
     const csv = parser.parse(rows);
