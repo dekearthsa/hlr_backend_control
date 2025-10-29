@@ -464,22 +464,22 @@ app.post("/download/csv", async (request, reply) => {
             cyclicName,
             CASE
                 WHEN sensor_id = 2 THEN avg_co2
-            END as co2_outlet
+            END as co2_outlet,
             CASE
                 WHEN sensor_id = 3 THEN avg_co2
-            END as co2_inlet
+            END as co2_inlet,
             CASE
                 WHEN sensor_id = 2 THEN avg_temperature
-            END as temp_outlet
+            END as temp_outlet,
             CASE
                 WHEN sensor_id = 2 THEN avg_temperature
-            END as temp_inlet
+            END as temp_inlet,
             CASE
                 WHEN sensor_id = 51 THEN avg_temperature
-            END as temp_tk
+            END as temp_tk,
             CASE
                 WHEN sensor_id = 2 THEN avg_temperature
-            END as humid_outlet
+            END as humid_outlet,
             CASE
                 WHEN sensor_id = 3 THEN avg_temperature
             END as hunmid_inlet
