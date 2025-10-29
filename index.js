@@ -113,12 +113,12 @@ app.post('/manual', async (request, reply) => {
         }
         // console.log("manual = >", payload)
         const reusltOut = await axios.post(`${HTTP_API}/manual`, payload);
-        if (reusltOut.status !== 200) {
+        if (reusltOut.status === 200) {
             const db = new Database('./hlr_db.db');
             db.prepare("UPDATE state_hlr SET systemType = ?, systemState = ?;").run("manual", "manual");
             reply.send({ status: reusltOut.status })
         } else {
-            reply.send({ status: 200 })
+            reply.send({ status: 500 })
         }
     } catch (err) {
         console.log(`error in app.post('/manual' ${err}`)
