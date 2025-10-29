@@ -471,7 +471,7 @@ app.post("/download/iaq/csv", async (request, reply) => {
                     AVG(PM10) AS PM10,
                     AVG(CO) AS CO
                 FROM hlr_iaq_sensor_data
-                WHERE datetime BETWEEN ? AND ?
+                WHERE timestamp BETWEEN ? AND ?
                 GROUP BY minute_th;
                 `
     const rows = db.prepare(query).all(startMs, endMs);
