@@ -430,7 +430,7 @@ app.post("/receive/iaq", async (request, reply) => {
     const payloadIN = request.body;
     // const payloadIN = json.parse(raw);
     // print(payloadIN)
-    console.log("payloadIN => ", payloadIN)
+    // console.log("payloadIN => ", payloadIN)
     if (!payloadIN.data.is_updated) return reply.status(200).send("is_updated: false");
     const db = new Database('./hlr_db.db')
     const ms = Date.now();
@@ -451,6 +451,58 @@ app.post("/receive/iaq", async (request, reply) => {
     );
 
     reply.status(200).send("ok")
+})
+
+app.post("/download/iaq/csv", async (request, reply) => {
+    const { startMs, endMs } = request.body;
+    if (!startMs) return reply.status(400).send("Invalid payload");
+    if (!endMs) return reply.status(400).send("Invalid payload");
+    const db = new Database('./hlr_db.db')
+    const query = `
+                SELECT
+                    strftime('%Y-%m-%d %H:%M:00', timestamp/1000, 'unixepoch', '+7 hours') AS minute_th,
+                    AVG(VOC) AS VOC,
+                    AVG(CO2) AS CO2,
+                    AVG(CH2O) AS CH2O,
+                    AVG(eVOC) AS eVOC,
+                    AVG(Humid) AS Humid,
+                    AVG(Temp) AS Temp,
+                    AVG(PM25) AS PM25,
+                    AVG(PM10) AS PM10,
+                    AVG(CO) AS CO,
+                FROM hlr_iaq_sensor_data
+                WHERE datetime BETWEEN ? AND ?
+                GROUP BY minute_th;
+                `
+    const rows = db.prepare(query).all(startMs, endMs);
+    // console.log(rows);
+    // --- ใช้ json2csv แปลงเป็นไฟล์ CSV ---
+    const parser = new Parser({
+        fields: [
+            'minute_th',
+            'VOC',
+            'CO2',
+            'CH2O',
+            'eVOC',
+            'Humid',
+            'Temp',
+            'PM25',
+            'PM10',
+            'CO'
+        ]
+    });
+    const csv = parser.parse(rows);
+
+    // --- ตั้งชื่อไฟล์และเขียนชั่วคราว ---
+    const filename = `sensor_iaq_avg_1min_${Date.now()}.csv`;
+    const filepath = path.join('./', filename);
+    fs.writeFileSync(filepath, csv);
+
+    // --- ส่งออกเป็นไฟล์ให้โหลด ---
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    return reply.send(fs.createReadStream(filepath));
+    // return reply.status(200).send(rows)
 })
 
 app.post("/download/csv", async (request, reply) => {
