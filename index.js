@@ -469,7 +469,7 @@ app.post("/download/iaq/csv", async (request, reply) => {
                     AVG(Temp) AS Temp,
                     AVG(PM25) AS PM25,
                     AVG(PM10) AS PM10,
-                    AVG(CO) AS CO,
+                    AVG(CO) AS CO
                 FROM hlr_iaq_sensor_data
                 WHERE datetime BETWEEN ? AND ?
                 GROUP BY minute_th;
