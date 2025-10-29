@@ -519,6 +519,7 @@ app.post("/download/csv", async (request, reply) => {
                     GROUP BY sensor_type, sensor_id, minute_th, cyclicName
             ) GROUP BY minute_th, cyclicName`
     const rows = db.prepare(query).all(startMs, endMs);
+    console.log(rows);
     // --- ใช้ json2csv แปลงเป็นไฟล์ CSV ---
     const parser = new Parser({
         fields: [
