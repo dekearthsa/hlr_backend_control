@@ -115,8 +115,7 @@ app.post('/manual', async (request, reply) => {
         const reusltOut = await axios.post(`${HTTP_API}/manual`, payload);
         if (reusltOut.status !== 200) {
             const db = new Database('./hlr_db.db');
-            const sql = "UPDATE state_hlr SET systemType = ?, systemState = ?"
-            await db.prepare(sql).run("manual", "manual")
+            db.prepare("UPDATE state_hlr SET systemType = ?, systemState = ?;").run("manual", "manual");
             reply.send({ status: reusltOut.status })
         } else {
             reply.send({ status: 200 })
