@@ -463,10 +463,10 @@ app.post("/download/csv", async (request, reply) => {
             minute_th,
             cyclicName,
             CASE
-                WHEN sensor_id = 2 THEN avg_co2
+                WHEN sensor_id = 2 THEN avg_co2_adjust
             END as co2_outlet,
             CASE
-                WHEN sensor_id = 3 THEN avg_co2
+                WHEN sensor_id = 3 THEN avg_co2_adjust
             END as co2_inlet,
             CASE
                 WHEN sensor_id = 2 THEN avg_temperature
@@ -478,10 +478,10 @@ app.post("/download/csv", async (request, reply) => {
                 WHEN sensor_id = 51 THEN avg_temperature
             END as temp_tk,
             CASE
-                WHEN sensor_id = 2 THEN avg_temperature
+                WHEN sensor_id = 2 THEN avg_humidity
             END as humid_outlet,
             CASE
-                WHEN sensor_id = 3 THEN avg_temperature
+                WHEN sensor_id = 3 THEN avg_humidity
             END as hunmid_inlet
         FROM (
             SELECT
