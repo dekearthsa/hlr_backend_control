@@ -618,10 +618,9 @@ app.post('/loop/data/iaq', async (request, reply) => {
                     WHEN sensor_id = '51' THEN 0
                     ELSE 0
                     END
-                ) AS avg_co2,
-                AVG(temperature) AS avg_temperature,
-                AVG(humidity)    AS avg_humidity,
-                COUNT(*)         AS n_points
+                ) AS co2,
+                AVG(temperature) AS temperature,
+                AVG(humidity)    AS humidity
                 FROM hlr_sensor_data
                 WHERE datetime >= ?
                 GROUP BY datetime, sensor_id, mode
@@ -642,10 +641,9 @@ app.post('/loop/data/iaq', async (request, reply) => {
                     WHEN sensor_id = '51' THEN 0
                     ELSE 0
                     END
-                ) AS avg_co2,
-                AVG(temperature) AS avg_temperature,
-                AVG(humidity)    AS avg_humidity,
-                COUNT(*)         AS n_points
+                ) AS co2,
+                AVG(temperature) AS temperature,
+                AVG(humidity)    AS humidity,
                 FROM hlr_sensor_data
                 WHERE datetime >= ?
                 GROUP BY datetime, sensor_id, mode
