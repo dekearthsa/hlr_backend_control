@@ -583,7 +583,7 @@ app.post("/download/csv", async (request, reply) => {
 // app.post("/get")
 
 app.post('/loop/data/iaq', async (request, reply) => {
-    const { start, latesttime } = request.body;
+    const { start, latesttime, rangeSelected } = request.body;
     // console.log(start, latesttime)
     const db = new Database('./hlr_db.db');
     // swr 
@@ -605,18 +605,68 @@ app.post('/loop/data/iaq', async (request, reply) => {
         return rows;
     } else {
         // console.log("eee")
-        const query = `SELECT datetime,sensor_id, 
-            CASE
-                WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
-                WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
-                WHEN sensor_id = 51 THEN 0
-            END co2, temperature, humidity, mode
-            FROM hlr_sensor_data
-        WHERE datetime >= ?  ORDER BY datetime ASC
-        `;
-        const rows = db.prepare(query).all(start)
-        // console.log(rows)
-        return rows;
+        if (rangeSelected >= 60400000) {
+            const query = `
+                SELECT
+                (CAST((datetime + 7*3600*1000) / 1800000 AS INTEGER) * 1800000) - 7*3600*1000 AS datetime,
+                sensor_id,
+                mode,
+                AVG(
+                    CASE
+                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
+                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '51' THEN 0
+                    ELSE 0
+                    END
+                ) AS avg_co2,
+                AVG(temperature) AS avg_temperature,
+                AVG(humidity)    AS avg_humidity,
+                COUNT(*)         AS n_points
+                FROM hlr_sensor_data
+                WHERE datetime >= ?
+                GROUP BY datetime, sensor_id, mode
+                ORDER BY datetime ASC;`
+            const rows = db.prepare(query).all(start)
+            // console.log(rows)
+            return rows;
+        } else {
+            const query = `
+            SELECT
+                (CAST((datetime + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS datetime,
+                sensor_id,
+                mode,
+                AVG(
+                    CASE
+                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
+                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '51' THEN 0
+                    ELSE 0
+                    END
+                ) AS avg_co2,
+                AVG(temperature) AS avg_temperature,
+                AVG(humidity)    AS avg_humidity,
+                COUNT(*)         AS n_points
+                FROM hlr_sensor_data
+                WHERE datetime >= ?
+                GROUP BY datetime, sensor_id, mode
+                ORDER BY datetime ASC;`
+            const rows = db.prepare(query).all(start)
+            // console.log(rows)
+            return rows;
+        }
+
+        // const query = `SELECT datetime,sensor_id, 
+        //     CASE
+        //         WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
+        //         WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
+        //         WHEN sensor_id = 51 THEN 0
+        //     END co2, temperature, humidity, mode
+        //     FROM hlr_sensor_data
+        // WHERE datetime >= ?  ORDER BY datetime ASC
+        // `;
+        // const rows = db.prepare(query).all(start)
+        // // console.log(rows)
+        // return rows;
     }
 });
 
