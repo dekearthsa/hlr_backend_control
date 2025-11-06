@@ -628,6 +628,29 @@ app.post('/loop/data/iaq', async (request, reply) => {
             const rows = db.prepare(query).all(start)
             // console.log(rows)
             return rows;
+        } else if (rangeSelected >= 43000000) {
+            const query = `
+            SELECT
+                (CAST((datetime + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS datetime,
+                sensor_id,
+                mode,
+                AVG(
+                    CASE
+                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
+                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '51' THEN 0
+                    ELSE 0
+                    END
+                ) AS co2,
+                AVG(temperature) AS temperature,
+                AVG(humidity)    AS humidity
+                FROM hlr_sensor_data
+                WHERE datetime >= ?
+                GROUP BY datetime, sensor_id, mode
+                ORDER BY datetime ASC;`
+            const rows = db.prepare(query).all(start)
+            // console.log(rows)
+            return rows;
         } else {
             const query = `
             SELECT
