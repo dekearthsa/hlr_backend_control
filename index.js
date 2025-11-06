@@ -643,7 +643,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
                     END
                 ) AS co2,
                 AVG(temperature) AS temperature,
-                AVG(humidity)    AS humidity,
+                AVG(humidity)    AS humidity
                 FROM hlr_sensor_data
                 WHERE datetime >= ?
                 GROUP BY datetime, sensor_id, mode
