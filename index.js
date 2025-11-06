@@ -590,15 +590,15 @@ app.post('/loop/data/iaq', async (request, reply) => {
     // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
     if (latesttime > 0) {
         const query = `
-            SELECT datetime, sensor_id, temperature, humidity, mode,
+            SELECT datetime as timestamp, sensor_id, temperature, humidity, mode,
             CASE
                 WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
                 WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
                 WHEN sensor_id = 51 THEN 0
             END co2
             FROM hlr_sensor_data
-            WHERE timestamp > ?
-            ORDER BY timestamp ASC
+            WHERE datetime > ?
+            ORDER BY datetime ASC
             LIMIT 100
         `;
         const rows = db.prepare(query).all(latesttime)
