@@ -609,7 +609,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             // console.log("rangeSelected 7day => ", rangeSelected)
             const query = `
                 SELECT
-                (CAST((datetime + 7*3600*1000) / 1800000 AS INTEGER) * 1800000) - 7*3600*1000 AS timestamp,
+                (CAST((datetime + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS timestamp,
                 sensor_id,
                 mode,
                 AVG(
@@ -633,7 +633,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             // console.log("rangeSelected day => ", rangeSelected)
             const query = `
             SELECT
-                (CAST((datetime + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS timestamp,
+                (CAST((datetime + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS timestamp,
                 sensor_id,
                 mode,
                 AVG(
@@ -655,25 +655,38 @@ app.post('/loop/data/iaq', async (request, reply) => {
             return rows;
         } else {
             // console.log("rangeSelected 1min => ", rangeSelected)
-            const query = `
-            SELECT
-                (CAST((datetime + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS timestamp,
-                sensor_id,
-                mode,
-                AVG(
-                    CASE
-                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
-                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
-                    WHEN sensor_id = '51' THEN 0
-                    ELSE 0
-                    END
-                ) AS co2,
-                AVG(temperature) AS temperature,
-                AVG(humidity)    AS humidity
+            // const query = `
+            // SELECT
+            //     (CAST((datetime + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS timestamp,
+            //     sensor_id,
+            //     mode,
+            //     AVG(
+            //         CASE
+            //         WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
+            //         WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+            //         WHEN sensor_id = '51' THEN 0
+            //         ELSE 0
+            //         END
+            //     ) AS co2,
+            //     AVG(temperature) AS temperature,
+            //     AVG(humidity)    AS humidity
+            //     FROM hlr_sensor_data
+            //     WHERE datetime >= ?
+            //     GROUP BY timestamp, sensor_id, mode
+            //     ORDER BY timestamp ASC;`
+
+            const query = `SELECT datetime as timestamp,sensor_id, 
+                CASE
+                    WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
+                    WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
+                    WHEN sensor_id = 51 THEN 0
+                END co2, temperature, humidity, mode
                 FROM hlr_sensor_data
-                WHERE datetime >= ?
-                GROUP BY timestamp, sensor_id, mode
-                ORDER BY timestamp ASC;`
+            WHERE datetime >= ?  ORDER BY datetime ASC
+            `;
+            // const rows = db.prepare(query).all(start)
+            // // console.log(rows)
+            // return rows;
             const rows = db.prepare(query).all(start)
             // console.log(rows)
             return rows;
