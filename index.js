@@ -606,6 +606,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
     } else {
         // console.log("eee")
         if (rangeSelected >= 60400000) {
+            console.log("rangeSelected 7day => ", rangeSelected)
             const query = `
                 SELECT
                 (CAST((datetime + 7*3600*1000) / 1800000 AS INTEGER) * 1800000) - 7*3600*1000 AS datetime,
@@ -629,6 +630,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             // console.log(rows)
             return rows;
         } else if (rangeSelected >= 43000000) {
+            console.log("rangeSelected day => ", rangeSelected)
             const query = `
             SELECT
                 (CAST((datetime + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS datetime,
@@ -652,6 +654,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             // console.log(rows)
             return rows;
         } else {
+            console.log("rangeSelected 1min => ", rangeSelected)
             const query = `
             SELECT
                 (CAST((datetime + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS datetime,
