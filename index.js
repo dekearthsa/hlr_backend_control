@@ -609,7 +609,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             console.log("rangeSelected 7day => ", rangeSelected)
             const query = `
                 SELECT
-                (CAST((datetime + 7*3600*1000) / 1800000 AS INTEGER) * 1800000) - 7*3600*1000 AS datetime,
+                (CAST((datetime + 7*3600*1000) / 3600000 AS INTEGER) * 3600000) - 7*3600*1000 AS datetime,
                 sensor_id,
                 mode,
                 AVG(
@@ -633,7 +633,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             console.log("rangeSelected day => ", rangeSelected)
             const query = `
             SELECT
-                (CAST((datetime + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS datetime,
+                (CAST((datetime + 7*3600*1000) / 600000 AS INTEGER) * 600000) - 7*3600*1000 AS datetime,
                 sensor_id,
                 mode,
                 AVG(
