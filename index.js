@@ -590,7 +590,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
     // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
     if (latesttime > 0) {
         const query = `
-            SELECT timestamp, sensor_id, temperature, humidity, mode,
+            SELECT datetime, sensor_id, temperature, humidity, mode,
             CASE
                 WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
                 WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
@@ -609,7 +609,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             console.log("rangeSelected 7day => ", rangeSelected)
             const query = `
                 SELECT
-                (CAST((datetime + 7*3600*1000) / 3600000 AS INTEGER) * 3600000) - 7*3600*1000 AS timestamp,
+                (CAST((datetime + 7*3600*1000) / 3600000 AS INTEGER) * 3600000) - 7*3600*1000 AS datetime,
                 sensor_id,
                 mode,
                 AVG(
@@ -624,8 +624,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 AVG(humidity)    AS humidity
                 FROM hlr_sensor_data
                 WHERE datetime >= ?
-                GROUP BY timestamp, sensor_id, mode
-                ORDER BY timestamp ASC;`
+                GROUP BY datetime, sensor_id, mode
+                ORDER BY datetime ASC;`
             const rows = db.prepare(query).all(start)
             // console.log(rows)
             return rows;
@@ -633,7 +633,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
             console.log("rangeSelected day => ", rangeSelected)
             const query = `
             SELECT
-                (CAST((datetime + 7*3600*1000) / 600000 AS INTEGER) * 600000) - 7*3600*1000 AS timestamp,
+                (CAST((datetime + 7*3600*1000) / 600000 AS INTEGER) * 600000) - 7*3600*1000 AS datetime,
                 sensor_id,
                 mode,
                 AVG(
@@ -648,8 +648,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 AVG(humidity)    AS humidity
                 FROM hlr_sensor_data
                 WHERE datetime >= ?
-                GROUP BY timestamp, sensor_id, mode
-                ORDER BY timestamp ASC;`
+                GROUP BY datetime, sensor_id, mode
+                ORDER BY datetime ASC;`
             const rows = db.prepare(query).all(start)
             // console.log(rows)
             return rows;
