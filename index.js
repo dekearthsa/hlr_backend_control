@@ -610,11 +610,6 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 ) m
                 ON m.sensor_id = h.sensor_id
                 AND m.maxdt     = h.datetime
-                -- กันกรณีเวลาชนกันหลายแถว (optional):
-                -- AND h.rowid = (
-                --   SELECT MAX(rowid) FROM hlr_sensor_data
-                --   WHERE sensor_id = m.sensor_id AND datetime = m.maxdt
-                -- )
                 ORDER BY h.sensor_id;
         `;
         const rows = db.prepare(query).all(latesttime)
