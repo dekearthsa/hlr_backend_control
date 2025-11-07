@@ -590,16 +590,32 @@ app.post('/loop/data/iaq', async (request, reply) => {
     // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
     if (latesttime > 0) {
         const query = `
-            SELECT datetime as timestamp, sensor_id, temperature, humidity, mode,
-            CASE
-                WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
-                WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
-                WHEN sensor_id = 51 THEN 0
-            END co2
-            FROM hlr_sensor_data
-            WHERE datetime > ?
-            ORDER BY datetime ASC
-            LIMIT 100
+            SELECT
+                h.datetime AS timestamp,
+                h.sensor_id,
+                h.temperature,
+                h.humidity,
+                h.mode,
+                CASE
+                    WHEN h.sensor_id = 2  THEN (1.023672650 * h.co2) - 19.479471
+                    WHEN h.sensor_id = 3  THEN (0.970384222 * h.co2) - 99.184335
+                    WHEN h.sensor_id = 51 THEN 0
+                END AS co2
+                FROM hlr_sensor_data h
+                JOIN (
+                SELECT sensor_id, MAX(datetime) AS maxdt
+                FROM hlr_sensor_data
+                WHERE datetime > ?
+                GROUP BY sensor_id
+                ) m
+                ON m.sensor_id = h.sensor_id
+                AND m.maxdt     = h.datetime
+                -- กันกรณีเวลาชนกันหลายแถว (optional):
+                -- AND h.rowid = (
+                --   SELECT MAX(rowid) FROM hlr_sensor_data
+                --   WHERE sensor_id = m.sensor_id AND datetime = m.maxdt
+                -- )
+                ORDER BY h.sensor_id;
         `;
         const rows = db.prepare(query).all(latesttime)
         return rows;
