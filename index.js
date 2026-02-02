@@ -1,27 +1,15 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import sqlite3 from 'sqlite3'
 import Database from 'better-sqlite3';
-import axios from 'axios';
+// import axios from 'axios';
 import { Parser } from 'json2csv'
 import fs from 'fs'
 import path from 'path'
-// sqlite3.verbose()
-const HTTP_API = 'http://172.29.247.180'
+// const HTTP_API = 'http://172.29.247.180'
 
-// Initialize SQLite database
-const dbPromise = new Promise((resolve, reject) => {
-    const db = new sqlite3.Database('./hlr_db.db', (err) => {
-        if (err) {
-            return reject(err)
-        }
-        resolve(db)
-    })
-})
+const db = new Database('./hlr_db.db');
 
-
-dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS hlr_sensor_data(
+db.exec(`CREATE TABLE IF NOT EXISTS hlr_sensor_data(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         datetime INTEGER,
         sensor_id TEXT,
@@ -32,12 +20,8 @@ dbPromise.then(async (db) => {
         sensor_type TEXT,
         cyclicName TEXT
     )`)
-}).catch(err => {
-    console.error('Failed to initialize database:', err)
-})
 
-dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS hlr_iaq_sensor_data(
+db.exec(`CREATE TABLE IF NOT EXISTS hlr_iaq_sensor_data(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp INTEGER,
         VOC REAL,
@@ -50,12 +34,8 @@ dbPromise.then(async (db) => {
         PM10 REAL,
         CO REAL
     )`)
-}).catch(err => {
-    console.error('Failed to initialize database:', err)
-})
 
-dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS state_hlr (
+db.exec(`CREATE TABLE IF NOT EXISTS state_hlr (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "cyclicName" TEXT,
         "systemState" TEXT,
@@ -65,12 +45,8 @@ dbPromise.then(async (db) => {
         "starttime" INTEGER,
         "endtime" INTEGER
     )`)
-}).catch(err => {
-    console.error('Failed to initialize database:', err)
-})
 
-dbPromise.then(async (db) => {
-    await db.exec(`CREATE TABLE IF NOT EXISTS setting_control (
+db.exec(`CREATE TABLE IF NOT EXISTS setting_control (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         "cyclic_name" TEXT,
@@ -84,9 +60,34 @@ dbPromise.then(async (db) => {
         "idle_duration" INTEGER,
         "cyclic_loop" INTEGER
     )`)
-}).catch(err => {
-    console.error('Failed to initialize database:', err)
-})
+
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS hlr_adjust_co2_setting(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    create_at INTEGER,
+    update_at INTEGER,
+    adjust_name TEXT,
+    is_active INTEGER, 
+    after_exhausts_plus REAL,
+    after_exhausts_multiplier REAL,
+    after_exhausts_offset REAL,
+    before_exhaust_plus REAL,
+    before_exhaust_multiplier REAL,
+    before_exhaust_offset REAL,
+    interlock_4c_plus REAL,
+    interlock_4c_multiplier REAL,
+    interlock_4c_offset REAL
+);
+`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS hlr_adjust_usage_history(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    adjust_name TEXT,
+    timestamp INTEGER
+);
+`);
 
 
 const app = Fastify({
@@ -99,9 +100,8 @@ app.register(cors, {
 })
 
 
-
 app.get('/health', async (request, reply) => {
-    return { status: 'ok' }
+    reply.send({ status: 'ok' })
 });
 
 app.post('/manual', async (request, reply) => {
@@ -111,8 +111,12 @@ app.post('/manual', async (request, reply) => {
             fan_volt: fanOn ? fanVolt : 0,
             heater: heaterOn,
         }
+        console.log("payload => ", payload)
         // console.log("manual = >", payload)
-        const reusltOut = await axios.post(`${HTTP_API}/manual`, payload);
+        // const reusltOut = await axios.post(`${HTTP_API}/manual`, payload);
+        const reusltOut = {
+            status: 200
+        }
         if (reusltOut.status === 200) {
             const db = new Database('./hlr_db.db');
             db.prepare("UPDATE state_hlr SET systemType = ?, systemState = ?;").run("manual", "manual");
@@ -225,8 +229,11 @@ app.post("/save/format", async (request, reply) => {
 })
 
 app.get('/manual/stop', async (request, reply) => {
-    const result = await axios.get(`${HTTP_API}/stop`);
+    // const result = await axios.get(`${HTTP_API}/stop`);
     // console.log("/manual/stop => ", result)
+    const result = {
+        status: 200
+    }
     const db = new Database('./hlr_db.db');
     const queryStateHlr = ` UPDATE state_hlr SET
                     systemState = ?,
@@ -306,7 +313,6 @@ app.post('/start', async (request, reply) => {
         // console.log("rows => ", rows)
         // console.log("rowsStateHlr =s> ", rowsStateHlr)
         if (rows.length > 0) {
-            // Update ถ้ามีข้อมูลอยู่แล้ว
             // console.log("(rows.length > 0) {")
             const queryUpdate = `
                 UPDATE setting_control
@@ -438,19 +444,18 @@ app.post("/receive/iaq", async (request, reply) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     db.prepare(query).run(
         ms, //1 
-        payloadIN.data.VOC_ppb, // voc 2
-        payloadIN.data.CO2_ppm, // co2 3
-        payloadIN.data.CH2O_ppm, // ch20 4
-        payloadIN.data.eVOC_ppb, // eboc 5
+        payloadIN.data.VOC_ppb,
+        payloadIN.data.CO2_ppm,
+        payloadIN.data.CH2O_ppm,
+        payloadIN.data.eVOC_ppb,
         0, // 6
         0, // 7
         0, // 8
         0, // 9
         0 // 10
     );
-
     reply.status(200).send("ok")
-})
+}) // http://172.29.246.20/receive/iaq 
 
 app.post("/download/iaq/csv", async (request, reply) => {
     const { startMs, endMs } = request.body;
@@ -459,26 +464,15 @@ app.post("/download/iaq/csv", async (request, reply) => {
     const db = new Database('./hlr_db.db')
     const query = `
                 SELECT
-                    strftime('%Y-%m-%d %H:%M:00', timestamp/1000, 'unixepoch', '+7 hours') AS minute_th,
-                    AVG(VOC) AS VOC,
-                    AVG(CO2) AS CO2,
-                    AVG(CH2O) AS CH2O,
-                    AVG(eVOC) AS eVOC,
-                    AVG(Humid) AS Humid,
-                    AVG(Temp) AS Temp,
-                    AVG(PM25) AS PM25,
-                    AVG(PM10) AS PM10,
-                    AVG(CO) AS CO
+                   *
                 FROM hlr_iaq_sensor_data
-                WHERE timestamp BETWEEN ? AND ?
-                GROUP BY minute_th;
+                WHERE timestamp BETWEEN ? AND ?;
                 `
     const rows = db.prepare(query).all(startMs, endMs);
     // console.log(rows);
-    // --- ใช้ json2csv แปลงเป็นไฟล์ CSV ---
     const parser = new Parser({
         fields: [
-            'minute_th',
+            'timestamp',
             'VOC',
             'CO2',
             'CH2O',
@@ -510,46 +504,50 @@ app.post("/download/csv", async (request, reply) => {
     if (!endMs) return reply.status(400).send("Invalid payload");
     const db = new Database('./hlr_db.db')
     const query = `SELECT
-                minute_th,
-                cyclicName,
+  minute_th,
+  cyclicName,
+  operation,
 
-                -- CO2
-                MAX(CASE WHEN sensor_id = 2  THEN avg_co2_adjust END) AS co2_outlet,
-                MAX(CASE WHEN sensor_id = 3  THEN avg_co2_adjust END) AS co2_inlet,
+  -- CO2
+  MAX(CASE WHEN sensor_id = 2 THEN avg_co2_adjust END) AS co2_outlet,
+  MAX(CASE WHEN sensor_id = 3 THEN avg_co2_adjust END) AS co2_inlet,
 
-                -- Temperature
-                MAX(CASE WHEN sensor_id = 2  THEN avg_temperature END) AS temp_outlet,
-                MAX(CASE WHEN sensor_id = 3  THEN avg_temperature END) AS temp_inlet,
-                MAX(CASE WHEN sensor_id = 51 THEN avg_temperature END) AS temp_tk,
+  -- Temperature
+  MAX(CASE WHEN sensor_id = 2  THEN avg_temperature END) AS temp_outlet,
+  MAX(CASE WHEN sensor_id = 3  THEN avg_temperature END) AS temp_inlet,
+  MAX(CASE WHEN sensor_id = 51 THEN avg_temperature END) AS temp_tk,
 
-                -- Humidity
-                MAX(CASE WHEN sensor_id = 2  THEN avg_humidity END)   AS humid_outlet,
-                MAX(CASE WHEN sensor_id = 3  THEN avg_humidity END)   AS humid_inlet
-                FROM (
-                SELECT
-                    sensor_id,
-                    cyclicName,
-                    strftime('%Y-%m-%d %H:%M:00', datetime/1000, 'unixepoch', '+7 hours') AS minute_th,
+  -- Humidity
+  MAX(CASE WHEN sensor_id = 2 THEN avg_humidity END) AS humid_outlet,
+  MAX(CASE WHEN sensor_id = 3 THEN avg_humidity END) AS humid_inlet
 
-                    AVG(co2)         AS avg_co2,
-                    AVG(temperature) AS avg_temperature,
-                    AVG(humidity)    AS avg_humidity,
+FROM (
+  SELECT
+    sensor_id,
+    cyclicName,
+    operation,
+    strftime('%Y-%m-%d %H:%M:00', datetime/1000, 'unixepoch', '+7 hours') AS minute_th,
 
-                    AVG(
-                    CASE
-                        WHEN sensor_id = 2  THEN (1.023672650 * co2) - 19.479471
-                        WHEN sensor_id = 3  THEN (0.970384222 * co2) - 99.184335
-                        WHEN sensor_id = 51 THEN 0
-                    END
-                    ) AS avg_co2_adjust
+    AVG(co2)         AS avg_co2,
+    AVG(temperature) AS avg_temperature,
+    AVG(humidity)    AS avg_humidity,
 
-                FROM hlr_sensor_data
-                WHERE datetime BETWEEN ? AND ?
-                GROUP BY sensor_id, minute_th, cyclicName
-                )
-                GROUP BY minute_th, cyclicName
-                ORDER BY minute_th;
-                `
+    AVG(
+      CASE
+        WHEN sensor_id = 2  THEN (1.023672650 * co2) - 19.479471
+        WHEN sensor_id = 3  THEN (0.970384222 * co2) - 99.184335
+        WHEN sensor_id = 51 THEN 0
+      END
+    ) AS avg_co2_adjust
+
+  FROM hlr_sensor_data
+  WHERE datetime BETWEEN ? AND ?
+  GROUP BY sensor_id, minute_th, cyclicName, operation
+) t
+GROUP BY minute_th, cyclicName, operation
+ORDER BY minute_th;
+`
+
     const rows = db.prepare(query).all(startMs, endMs);
     // console.log(rows);
     // --- ใช้ json2csv แปลงเป็นไฟล์ CSV ---
@@ -580,38 +578,31 @@ app.post("/download/csv", async (request, reply) => {
     // return reply.status(200).send(rows)
 })
 
-// app.post("/get")
 
 app.post('/loop/data/iaq', async (request, reply) => {
     const { start, latesttime, rangeSelected } = request.body;
     // console.log(start, latesttime)
     const db = new Database('./hlr_db.db');
-    // swr 
-    // const db = new sqlite3.Database('/Users/pcsishun/project_envalic/hlr_control_system/hlr_backend/hlr_db.db')
     if (latesttime > 0) {
         const query = `
             SELECT
-                h.datetime AS timestamp,
-                h.sensor_id,
-                h.temperature,
-                h.humidity,
-                h.mode,
+                datetime AS timestamp,
+                sensor_id,
+                mode,
                 CASE
-                    WHEN h.sensor_id = 2  THEN (1.023672650 * h.co2) - 19.479471
-                    WHEN h.sensor_id = 3  THEN (0.970384222 * h.co2) - 99.184335
-                    WHEN h.sensor_id = 51 THEN 0
-                END AS co2
-                FROM hlr_sensor_data h
-                JOIN (
-                SELECT sensor_id, MAX(datetime) AS maxdt
+                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
+                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '51' THEN 0
+                    ELSE 0
+                    END
+                AS co2,
+                temperature AS temperature,
+                humidity AS humidity
                 FROM hlr_sensor_data
-                WHERE datetime > ?
-                GROUP BY sensor_id
-                ) m
-                ON m.sensor_id = h.sensor_id
-                AND m.maxdt     = h.datetime
-                ORDER BY h.sensor_id;
-        `;
+                WHERE datetime >= ?
+                ORDER BY timestamp ASC;
+            `;
+
         const rows = db.prepare(query).all(latesttime)
         return rows;
     } else {
@@ -636,7 +627,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 FROM hlr_sensor_data
                 WHERE datetime >= ?
                 GROUP BY timestamp, sensor_id, mode
-                ORDER BY timestamp ASC;`
+                ORDER BY timestamp ASC;
+                `
             const rows = db.prepare(query).all(start)
             // console.log(rows)
             return rows;
@@ -665,27 +657,6 @@ app.post('/loop/data/iaq', async (request, reply) => {
             // console.log(rows)
             return rows;
         } else {
-            // console.log("rangeSelected 1min => ", rangeSelected)
-            // const query = `
-            // SELECT
-            //     (CAST((datetime + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS timestamp,
-            //     sensor_id,
-            //     mode,
-            //     AVG(
-            //         CASE
-            //         WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
-            //         WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
-            //         WHEN sensor_id = '51' THEN 0
-            //         ELSE 0
-            //         END
-            //     ) AS co2,
-            //     AVG(temperature) AS temperature,
-            //     AVG(humidity)    AS humidity
-            //     FROM hlr_sensor_data
-            //     WHERE datetime >= ?
-            //     GROUP BY timestamp, sensor_id, mode
-            //     ORDER BY timestamp ASC;`
-
             const query = `SELECT datetime as timestamp,sensor_id, 
                 CASE
                     WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
@@ -695,26 +666,9 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 FROM hlr_sensor_data
             WHERE datetime >= ?  ORDER BY datetime ASC
             `;
-            // const rows = db.prepare(query).all(start)
-            // // console.log(rows)
-            // return rows;
             const rows = db.prepare(query).all(start)
-            // console.log(rows)
             return rows;
         }
-
-        // const query = `SELECT datetime,sensor_id, 
-        //     CASE
-        //         WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
-        //         WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
-        //         WHEN sensor_id = 51 THEN 0
-        //     END co2, temperature, humidity, mode
-        //     FROM hlr_sensor_data
-        // WHERE datetime >= ?  ORDER BY datetime ASC
-        // `;
-        // const rows = db.prepare(query).all(start)
-        // // console.log(rows)
-        // return rows;
     }
 });
 
