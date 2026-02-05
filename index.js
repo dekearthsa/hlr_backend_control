@@ -464,15 +464,25 @@ app.post("/download/iaq/csv", async (request, reply) => {
     const db = new Database('./hlr_db.db')
     const query = `
                 SELECT
-                   *
+                    strftime('%Y-%m-%d %H:%M:00', timestamp/1000, 'unixepoch', '+7 hours') AS minute_th,
+                    AVG(VOC) AS VOC,
+                    AVG(CO2) AS CO2,
+                    AVG(CH2O) AS CH2O,
+                    AVG(eVOC) AS eVOC,
+                    AVG(Humid) AS Humid,
+                    AVG(Temp) AS Temp,
+                    AVG(PM25) AS PM25,
+                    AVG(PM10) AS PM10,
+                    AVG(CO) AS CO
                 FROM hlr_iaq_sensor_data
-                WHERE timestamp BETWEEN ? AND ?;
+                WHERE timestamp BETWEEN ? AND ?
+                GROUP BY minute_th;
                 `
     const rows = db.prepare(query).all(startMs, endMs);
     // console.log(rows);
     const parser = new Parser({
         fields: [
-            'timestamp',
+            'minute_th',
             'VOC',
             'CO2',
             'CH2O',
@@ -608,7 +618,7 @@ app.post('/loop/data/iaq', async (request, reply) => {
     } else {
         // console.log("eee")
         if (rangeSelected >= 60400000) {
-            // console.log("rangeSelected 7day => ", rangeSelected)
+            // console.log("rangeSelected 7day => ", rangeSelected) 30 min
             const query = `
                 SELECT
                 (CAST((datetime + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS timestamp,
@@ -665,6 +675,92 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 END co2, temperature, humidity, mode
                 FROM hlr_sensor_data
             WHERE datetime >= ?  ORDER BY datetime ASC
+            `;
+            const rows = db.prepare(query).all(start)
+            return rows;
+        }
+    }
+});
+
+app.post('/loop/data/ap-iaq', async (request, reply) => {
+    const { start, latesttime, rangeSelected } = request.body;
+    const db = new Database('./hlr_db.db');
+    if (latesttime > 0) {
+        const query = `
+            SELECT
+                timestamp AS timestamp,
+                VOC,
+                CO2,
+                CH2O,
+                eVOC,
+                Humid,
+                Temp,
+                PM25,
+                PM10,
+                CO
+            FROM hlr_iaq_sensor_data
+            WHERE timestamp >= ?
+            ORDER BY timestamp ASC;
+        `;
+        const rows = db.prepare(query).all(latesttime)
+        return rows;
+    } else {
+        if (rangeSelected >= 60400000) {
+            const query = `
+                SELECT
+                    (CAST((timestamp + 7*3600*1000) / 180000 AS INTEGER) * 180000) - 7*3600*1000 AS timestamp,
+                    AVG(VOC) AS VOC,
+                    AVG(CO2) AS CO2,
+                    AVG(CH2O) AS CH2O,
+                    AVG(eVOC) AS eVOC,
+                    AVG(Humid) AS Humid,
+                    AVG(Temp) AS Temp,
+                    AVG(PM25) AS PM25,
+                    AVG(PM10) AS PM10,
+                    AVG(CO) AS CO
+                FROM hlr_iaq_sensor_data
+                WHERE timestamp >= ?
+                GROUP BY timestamp
+                ORDER BY timestamp ASC;
+            `
+            const rows = db.prepare(query).all(start)
+            return rows;
+        } else if (rangeSelected >= 43200000) {
+            const query = `
+                SELECT
+                    (CAST((timestamp + 7*3600*1000) / 60000 AS INTEGER) * 60000) - 7*3600*1000 AS timestamp,
+                    AVG(VOC) AS VOC,
+                    AVG(CO2) AS CO2,
+                    AVG(CH2O) AS CH2O,
+                    AVG(eVOC) AS eVOC,
+                    AVG(Humid) AS Humid,
+                    AVG(Temp) AS Temp,
+                    AVG(PM25) AS PM25,
+                    AVG(PM10) AS PM10,
+                    AVG(CO) AS CO
+                FROM hlr_iaq_sensor_data
+                WHERE timestamp >= ?
+                GROUP BY timestamp
+                ORDER BY timestamp ASC;
+            `
+            const rows = db.prepare(query).all(start)
+            return rows;
+        } else {
+            const query = `
+                SELECT
+                    timestamp AS timestamp,
+                    VOC,
+                    CO2,
+                    CH2O,
+                    eVOC,
+                    Humid,
+                    Temp,
+                    PM25,
+                    PM10,
+                    CO
+                FROM hlr_iaq_sensor_data
+                WHERE timestamp >= ?
+                ORDER BY timestamp ASC;
             `;
             const rows = db.prepare(query).all(start)
             return rows;
