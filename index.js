@@ -9,6 +9,34 @@ import path from 'path'
 
 const db = new Database('./hlr_db.db');
 
+// dbPromise.then(async (db) => {
+//     try {
+//         // [WARNING]: Dropping table to support new schema structure.
+//         // ต้องลบตารางเก่าทิ้งเพราะ column ไม่เหมือนเดิม (ถ้าจะเก็บข้อมูลเก่าต้องทำ Migration)
+//         await db.exec('DROP TABLE IF EXISTS offset');
+
+//         await db.exec(`CREATE TABLE IF NOT EXISTS offset (
+//             systemID TEXT PRIMARY KEY,
+//             topic TEXT,
+//             after_scrub_plus REAL,
+//             after_scrub_multiplier REAL,
+//             after_scrub_offset REAL,
+//             before_scrub_plus REAL,
+//             before_scrub_multiplier REAL,
+//             before_scrub_offset REAL,
+//             interlock_4c_plus REAL,
+//             interlock_4c_multiplier REAL,
+//             interlock_4c_offset REAL,
+//             timestamp TEXT
+//         )`);
+//         console.log('Table "offset" is ready (Schema Updated).');
+//     } catch (err) {
+//         console.error('Error creating table:', err);
+//     }
+// }).catch(err => {
+//     console.error('Failed to initialize database connection:', err);
+// });
+
 db.exec(`CREATE TABLE IF NOT EXISTS hlr_sensor_data(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         datetime INTEGER,
@@ -508,55 +536,80 @@ app.post("/download/iaq/csv", async (request, reply) => {
     // return reply.status(200).send(rows)
 })
 
+const getOffsetSettings = (db) => {
+    try {
+        const row = db.prepare("SELECT * FROM offset WHERE systemID = 'rd2'").get();
+        if (row) return row;
+    } catch (e) {
+        console.error("Error fetching offset:", e);
+    }
+    // Default fallback
+    return {
+        after_scrub_plus: 0,
+        after_scrub_multiplier: 1,
+        before_scrub_plus: 0,
+        before_scrub_multiplier: 1,
+    };
+};
+
 app.post("/download/csv", async (request, reply) => {
     const { startMs, endMs } = request.body;
     if (!startMs) return reply.status(400).send("Invalid payload");
     if (!endMs) return reply.status(400).send("Invalid payload");
     const db = new Database('./hlr_db.db')
+
+    // Fetch dynamic offset settings
+    const {
+        after_scrub_multiplier,
+        after_scrub_plus,
+        before_scrub_multiplier,
+        before_scrub_plus
+    } = getOffsetSettings(db);
+
     const query = `SELECT
-  minute_th,
-  cyclicName,
-  operation,
+                    minute_th,
+                    cyclicName,
+                    operation,
 
-  -- CO2
-  MAX(CASE WHEN sensor_id = 2 THEN avg_co2_adjust END) AS co2_outlet,
-  MAX(CASE WHEN sensor_id = 3 THEN avg_co2_adjust END) AS co2_inlet,
+                    -- CO2
+                    MAX(CASE WHEN sensor_id = 2 THEN avg_co2_adjust END) AS co2_outlet,
+                    MAX(CASE WHEN sensor_id = 3 THEN avg_co2_adjust END) AS co2_inlet,
 
-  -- Temperature
-  MAX(CASE WHEN sensor_id = 2  THEN avg_temperature END) AS temp_outlet,
-  MAX(CASE WHEN sensor_id = 3  THEN avg_temperature END) AS temp_inlet,
-  MAX(CASE WHEN sensor_id = 51 THEN avg_temperature END) AS temp_tk,
+                    -- Temperature
+                    MAX(CASE WHEN sensor_id = 2  THEN avg_temperature END) AS temp_outlet,
+                    MAX(CASE WHEN sensor_id = 3  THEN avg_temperature END) AS temp_inlet,
+                    MAX(CASE WHEN sensor_id = 51 THEN avg_temperature END) AS temp_tk,
 
-  -- Humidity
-  MAX(CASE WHEN sensor_id = 2 THEN avg_humidity END) AS humid_outlet,
-  MAX(CASE WHEN sensor_id = 3 THEN avg_humidity END) AS humid_inlet
+                    -- Humidity
+                    MAX(CASE WHEN sensor_id = 2 THEN avg_humidity END) AS humid_outlet,
+                    MAX(CASE WHEN sensor_id = 3 THEN avg_humidity END) AS humid_inlet
 
-FROM (
-  SELECT
-    sensor_id,
-    cyclicName,
-    operation,
-    strftime('%Y-%m-%d %H:%M:00', datetime/1000, 'unixepoch', '+7 hours') AS minute_th,
+                    FROM (
+                    SELECT
+                        sensor_id,
+                        cyclicName,
+                        operation,
+                        strftime('%Y-%m-%d %H:%M:00', datetime/1000, 'unixepoch', '+7 hours') AS minute_th,
 
-    AVG(co2)         AS avg_co2,
-    AVG(temperature) AS avg_temperature,
-    AVG(humidity)    AS avg_humidity,
+                        AVG(co2)         AS avg_co2,
+                        AVG(temperature) AS avg_temperature,
+                        AVG(humidity)    AS avg_humidity,
 
-    AVG(
-      CASE
-        WHEN sensor_id = 2  THEN (1.023672650 * co2) - 19.479471
-        WHEN sensor_id = 3  THEN (0.970384222 * co2) - 99.184335
-        WHEN sensor_id = 51 THEN 0
-      END
-    ) AS avg_co2_adjust
+                        AVG(
+                        CASE
+                            WHEN sensor_id = 2  THEN (${after_scrub_multiplier} * co2) + (${after_scrub_plus})
+                            WHEN sensor_id = 3  THEN (${before_scrub_multiplier} * co2) + (${before_scrub_plus})
+                            WHEN sensor_id = 51 THEN 0
+                        END
+                        ) AS avg_co2_adjust
 
-  FROM hlr_sensor_data
-  WHERE datetime BETWEEN ? AND ?
-  GROUP BY sensor_id, minute_th, cyclicName, operation
-) t
-GROUP BY minute_th, cyclicName, operation
-ORDER BY minute_th;
-`
+                    FROM hlr_sensor_data
+                    WHERE datetime BETWEEN ? AND ?
+                    GROUP BY sensor_id, minute_th, cyclicName, operation
+                    ) t
+                    GROUP BY minute_th, cyclicName, operation
+                    ORDER BY minute_th;
+                    `
 
     const rows = db.prepare(query).all(startMs, endMs);
     // console.log(rows);
@@ -593,6 +646,15 @@ app.post('/loop/data/iaq', async (request, reply) => {
     const { start, latesttime, rangeSelected } = request.body;
     // console.log(start, latesttime)
     const db = new Database('./hlr_db.db');
+
+    // Fetch dynamic offset settings
+    const {
+        after_scrub_multiplier,
+        after_scrub_plus,
+        before_scrub_multiplier,
+        before_scrub_plus
+    } = getOffsetSettings(db);
+
     if (latesttime > 0) {
         const query = `
             SELECT
@@ -600,8 +662,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 sensor_id,
                 mode,
                 CASE
-                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
-                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '2'  THEN (${after_scrub_multiplier} * co2) + (${after_scrub_plus})
+                    WHEN sensor_id = '3'  THEN (${before_scrub_multiplier} * co2) + (${before_scrub_plus})
                     WHEN sensor_id = '51' THEN 0
                     ELSE 0
                     END
@@ -626,8 +688,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 mode,
                 AVG(
                     CASE
-                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
-                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '2'  THEN (${after_scrub_multiplier} * co2) + (${after_scrub_plus})
+                    WHEN sensor_id = '3'  THEN (${before_scrub_multiplier} * co2) + (${before_scrub_plus})
                     WHEN sensor_id = '51' THEN 0
                     ELSE 0
                     END
@@ -651,8 +713,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
                 mode,
                 AVG(
                     CASE
-                    WHEN sensor_id = '2'  THEN (1.023672650 * co2) - 19.479471
-                    WHEN sensor_id = '3'  THEN (0.970384222 * co2) - 99.184335
+                    WHEN sensor_id = '2'  THEN (${after_scrub_multiplier} * co2) + (${after_scrub_plus})
+                    WHEN sensor_id = '3'  THEN (${before_scrub_multiplier} * co2) + (${before_scrub_plus})
                     WHEN sensor_id = '51' THEN 0
                     ELSE 0
                     END
@@ -669,8 +731,8 @@ app.post('/loop/data/iaq', async (request, reply) => {
         } else {
             const query = `SELECT datetime as timestamp,sensor_id, 
                 CASE
-                    WHEN sensor_id = 2 THEN (1.023672650 * co2) - 19.479471
-                    WHEN sensor_id = 3 THEN (0.970384222 * co2)- 99.184335
+                    WHEN sensor_id = 2 THEN (${after_scrub_multiplier} * co2) + (${after_scrub_plus})
+                    WHEN sensor_id = 3 THEN (${before_scrub_multiplier} * co2) + (${before_scrub_plus})
                     WHEN sensor_id = 51 THEN 0
                 END co2, temperature, humidity, mode
                 FROM hlr_sensor_data
